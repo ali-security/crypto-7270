@@ -618,26 +618,46 @@ func (t *handshakeTransport) enterKeyExchange(otherInitPacket []byte) error {
 	return nil
 }
 
-func (t *handshakeTransport) server(kex kexAlgorithm, algs *algorithms, magics *handshakeMagics) (*kexResult, error) {
-	var hostKey Signer
-	for _, k := range t.hostKeys {
-		kt := k.PublicKey().Type()
-		if kt == algs.hostKey {
-			hostKey = k
-		} else if signer, ok := k.(AlgorithmSigner); ok {
-			// Some signature algorithms don't show up as key types
-			// so we have to manually check for a compatible host key.
-			switch kt {
-			case KeyAlgoRSA:
-				if algs.hostKey == SigAlgoRSASHA2256 || algs.hostKey == SigAlgoRSASHA2512 {
-					hostKey = &rsaSigner{signer, algs.hostKey}
-				}
-			case CertAlgoRSAv01:
-				if algs.hostKey == CertSigAlgoRSASHA2256v01 || algs.hostKey == CertSigAlgoRSASHA2512v01 {
-					hostKey = &rsaSigner{signer, certToPrivAlgo(algs.hostKey)}
-				}
+// algorithmSignerWrapper is an AlgorithmSigner that only supports the default
+// key format algorithm.
+//
+// This is technically a violation of the AlgorithmSigner interface, but it
+// should be unreachable given where we use this. Anyway, at least it returns an
+// error instead of panicing or producing an incorrect signature.
+type algorithmSignerWrapper struct {
+	Signer
+}
+
+func (a algorithmSignerWrapper) SignWithAlgorithm(rand io.Reader, data []byte, algorithm string) (*Signature, error) {
+	if algorithm != underlyingAlgo(a.PublicKey().Type()) {
+		return nil, errors.New("ssh: internal error: algorithmSignerWrapper invoked with non-default algorithm")
+	}
+	return a.Sign(rand, data)
+}
+
+func pickHostKey(hostKeys []Signer, algo string) AlgorithmSigner {
+	for _, k := range hostKeys {
+		hostKeyType := k.PublicKey().Type()
+		if algo == hostKeyType {
+			return algorithmSignerWrapper{k}
+		}
+		k, ok := k.(AlgorithmSigner)
+		if !ok {
+			continue
+		}
+		for _, a := range algorithmsForKeyFormat(k.PublicKey().Type()) {
+			if algo == a {
+				return k
 			}
 		}
+	}
+	return nil
+}
+
+func (t *handshakeTransport) server(kex kexAlgorithm, algs *algorithms, magics *handshakeMagics) (*kexResult, error) {
+	hostKey := pickHostKey(t.hostKeys, t.algorithms.hostKey)
+	if hostKey == nil {
+		return nil, errors.New("ssh: internal error: negotiated unsupported signature type")
 	}
 
 	r, err := kex.Server(t.conn, t.config.Rand, magics, hostKey)

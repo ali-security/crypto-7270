@@ -108,6 +108,20 @@ var hashFuncs = map[string]crypto.Hash{
 	CertAlgoECDSA521v01:      crypto.SHA512,
 }
 
+// algorithmsForKeyFormat returns the supported signature algorithms for a given
+// public key format (PublicKey.Type), in order of preference. See RFC 8332,
+// Section 2. See also the note in sendKexInit on backwards compatibility.
+func algorithmsForKeyFormat(keyFormat string) []string {
+	switch keyFormat {
+	case KeyAlgoRSA:
+		return []string{SigAlgoRSASHA2256, SigAlgoRSASHA2512, KeyAlgoRSA}
+	case CertAlgoRSAv01:
+		return []string{CertSigAlgoRSASHA2256v01, CertSigAlgoRSASHA2512v01, CertAlgoRSAv01}
+	default:
+		return []string{keyFormat}
+	}
+}
+
 // unexpectedMessageError results when the SSH message that we received didn't
 // match what we wanted.
 func unexpectedMessageError(expected, got uint8) error {

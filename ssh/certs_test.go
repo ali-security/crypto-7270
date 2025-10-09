@@ -252,6 +252,7 @@ func TestCertTypes(t *testing.T) {
 		{CertAlgoRSAv01, &legacyRSASigner{testSigners["rsa"]}, SigAlgoRSA},
 		{CertAlgoRSAv01, testSigners["rsa-sha2-256"], SigAlgoRSASHA2512},
 		{CertAlgoRSAv01, testSigners["rsa-sha2-512"], SigAlgoRSASHA2512},
+		{"legacyRSASigner", &legacyRSASigner{testSigners["rsa"]}, KeyAlgoRSA},
 		{CertAlgoDSAv01, testSigners["dsa"], ""},
 	}
 

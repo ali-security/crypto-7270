@@ -473,6 +473,15 @@ func certToPrivAlgo(algo string) string {
 	panic("unknown cert algorithm")
 }
 
+func underlyingAlgo(algo string) string {
+	for privAlgo, pubAlgo := range certAlgoNames {
+		if pubAlgo == algo {
+			return privAlgo
+		}
+	}
+	return algo
+}
+
 func (cert *Certificate) bytesForSigning() []byte {
 	c2 := *cert
 	c2.Signature = nil
